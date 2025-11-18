@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frank_wolfe_lab"
+version = "0.1.0"
+description = "Core optimization algorithms (Frank-Wolfe and related gradient methods)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Aboba-gif", email = "sus.sus.sus.sus90@gmail.com" }
+]
+license = { text = "MIT" }
+
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "mypy",
+  "ruff",
+  "black"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = ["E", "F", "W", "I", "N", "B"]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
