@@ -24,7 +24,7 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
         name: str = "FrankWolfe",
         **kwargs: Any,
     ) -> None:
-        super().__init__(name, **kwargs)
+        super().__init__(name=name, **{"learning_rate": 1.0, **kwargs})
         self._constraint = constraint
 
         # Счётчик итераций (глобальный для всех параметров).
