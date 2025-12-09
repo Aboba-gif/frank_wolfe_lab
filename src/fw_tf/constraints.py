@@ -19,30 +19,19 @@ class ConstraintSet(ABC):
         raise NotImplementedError
 
 
-class L2BallConstraint(ConstraintSet):
-    """
-    Ограничение вида ||w||_2 <= radius для ОДНОГО тензора var.
-
-    Линейный оракул:
-        s = -radius * g / ||g||, если g != 0,
-        s = 0, если g == 0.
-    """
-
-    def __init__(self, radius: float = 1.0) -> None:
+class L2BallConstraint:
+    def __init__(self, radius: float) -> None:
         self.radius = float(radius)
 
-    def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:  # noqa: ARG002
+    def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:
+        # argmin_{||s||_2 <= R} <grad, s> = -R * grad / ||grad||
         grad = tf.convert_to_tensor(grad)
-        norm = tf.norm(grad)
-
-        def on_non_zero() -> tf.Tensor:
-            direction = grad / norm
-            return -self.radius * direction
-
-        def on_zero() -> tf.Tensor:
-            return tf.zeros_like(grad)
-
-        return tf.cond(norm > 0, on_non_zero, on_zero)
+        eps = tf.cast(1e-12, grad.dtype)
+        grad_norm = tf.norm(grad)
+        safe_norm = tf.maximum(grad_norm, eps)
+        direction = -grad / safe_norm
+        radius = tf.cast(self.radius, grad.dtype)
+        return radius * direction
 
 
 class LInfBallConstraint(ConstraintSet):
@@ -58,5 +47,4 @@ class LInfBallConstraint(ConstraintSet):
 
     def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:  # noqa: ARG002
         grad = tf.convert_to_tensor(grad)
-        # sign(0) = 0, это ок
         return -self.radius * tf.sign(grad)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional
+from typing import Any
 
 import tensorflow as tf
 
@@ -21,59 +21,47 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
     def __init__(
         self,
         constraint: ConstraintSet,
+        gamma: float = 0.05,
         name: str = "FrankWolfe",
         **kwargs: Any,
     ) -> None:
+
         super().__init__(name=name, **{"learning_rate": 1.0, **kwargs})
         self._constraint = constraint
+        self.gamma = float(gamma)
 
-        # Счётчик итераций (глобальный для всех параметров).
-        self._step = self.add_weight(
-            name="iteration",
-            shape=[],
-            dtype=tf.int64,
-            initializer="zeros",
-            trainable=False,
+    def build(self, var_list):
+        super().build(var_list)
+
+    def update_step(self, gradient, variable, learning_rate=None):
+        """Single FW update: x_{k+1} = (1 - γ) x_k + γ s_k.
+
+        Keras 3 передаёт сюда (gradient, variable, learning_rate);
+        learning_rate игнорируем.
+        """
+        if gradient is None:
+            return
+
+        s_k = self._constraint.argmin(grad=gradient, var=variable)
+
+        gamma = tf.cast(self.gamma, variable.dtype)
+        new_var = (1.0 - gamma) * variable + gamma * s_k
+        variable.assign(new_var)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "gamma": self.gamma,
+                "constraint": tf.keras.saving.serialize_keras_object(
+                    self._constraint
+                ),
+            }
         )
+        return config
 
-    def _create_slots(self, var_list: Any) -> None:  # noqa: D401, ANN401
-        # Слоты не нужны: FW не использует моменты и т.п.
-        return
-
-    def _resource_apply_dense(
-        self,
-        grad: tf.Tensor,
-        var: tf.Variable,
-        apply_state: Optional[Mapping[str, Any]] = None,
-    ) -> tf.Tensor:
-        # k <- k + 1
-        step = self._step.assign_add(1)
-        step_f = tf.cast(step, var.dtype)
-
-        # gamma_k = 2 / (k + 2)
-        gamma = 2.0 / (step_f + 2.0)
-
-        # s_k = argmin_{s in S} <grad, s>
-        s_k = self._constraint.argmin(grad=grad, var=var)
-
-        new_var = (1.0 - gamma) * var + gamma * s_k
-        return var.assign(new_var)
-
-    def _resource_apply_sparse(
-        self,
-        grad: tf.Tensor,
-        var: tf.Variable,
-        indices: tf.Tensor,
-        apply_state: Optional[Mapping[str, Any]] = None,
-    ) -> tf.Tensor:
-        # Простейшая (не оптимальная) реализация: разреженный -> плотный
-        dense_grad = tf.convert_to_tensor(grad)
-        return self._resource_apply_dense(dense_grad, var, apply_state)
-
-    def get_config(self) -> Dict[str, Any]:
-        base_config = super().get_config()
-        # constraint нельзя просто так сериализовать; сохраняем класс по имени.
-        return {
-            **base_config,
-            "constraint_class": self._constraint.__class__.__name__,
-        }
+    @classmethod
+    def from_config(cls, config):
+        constraint_cfg = config.pop("constraint")
+        constraint = tf.keras.saving.deserialize_keras_object(constraint_cfg)
+        return cls(constraint=constraint, **config)
