@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -14,13 +14,18 @@ from .optimizers import FrankWolfeOptimizer
 
 @dataclass
 class ImagenetFWConfig:
+    """
+    Конфигурация эксперимента:
+      - Frozen ResNet50 backbone (ImageNet),
+      - линейный классификатор над фичами CIFAR-10,
+      - сравнение Adam vs Frank–Wolfe.
+    """
+
     batch_size: int = 128
     epochs: int = 10
-    
-    # размер выходного вектора фич Backbone
+
     feature_dim: int = 2048
 
-    # радиус L2-шара и шаг FW
     fw_radius: float = 50.0
     fw_gamma: float = 0.02
 
@@ -30,7 +35,8 @@ def make_imagenet_backbone(
 ) -> tf.keras.Model:
     """
     Предобученный на ImageNet backbone (ResNet50) с замороженными весами.
-    Мы ресайзим CIFAR-10 до 224x224, как ожидает ResNet.
+
+    CIFAR-10 ресайзится до 224x224, как ожидает ResNet.
 
     Возвращает модель, выдающую вектор признаков размера (feature_dim,).
     """
@@ -117,7 +123,7 @@ def run_imagenet_feature_experiment(cfg: ImagenetFWConfig) -> Dict[str, float]:
       2) Строим матрицы фич для train / test CIFAR-10.
       3) Обучаем чистый линейный классификатор:
          - Adam (baseline),
-         - Frank-Wolfe (L2-шар) на тех же фичах.
+         - Frank–Wolfe (L2-шар) на тех же фичах.
 
     Возвращает словарь: имя оптимизатора -> best val accuracy.
     """
@@ -132,7 +138,6 @@ def run_imagenet_feature_experiment(cfg: ImagenetFWConfig) -> Dict[str, float]:
     print("Extracting features for test set...")
     x_feats_test = extract_features(backbone, x_test, batch_size=cfg.batch_size)
 
-    # определяем фактическое feature_dim по backbone
     feature_dim = x_feats_train.shape[1]
     if cfg.feature_dim != feature_dim:
         print(
@@ -158,6 +163,7 @@ def run_imagenet_feature_experiment(cfg: ImagenetFWConfig) -> Dict[str, float]:
     fw_opt = FrankWolfeOptimizer(
         constraint=fw_constraint,
         gamma=cfg.fw_gamma,
+        use_diminishing_step=False,
     )
     fw_metrics = train_linear_head_with_optimizer(
         optimizer=fw_opt,

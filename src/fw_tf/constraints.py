@@ -6,25 +6,46 @@ import tensorflow as tf
 
 
 class ConstraintSet(ABC):
-    """Абстракция множества S: определяет линейный оракул argmin_{s in S} <g, s>."""
+    """
+    Абстракция множества S для метода Франка–Вольфа.
+
+    Определяет линейный оракул:
+        argmin_{s in S} <grad, s>
+    для заданного градиента по переменной var.
+    """
 
     @abstractmethod
     def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:
         """
         Возвращает s_k = argmin_{s in S} <grad, s>.
 
-        grad: градиент по var (той же формы, что и var).
-        var: текущие веса (может использоваться при определении S, если нужно).
+        Параметры
+        ---------
+        grad : tf.Tensor
+            Градиент по var (той же формы, что и var).
+        var : tf.Tensor
+            Текущие веса. Может использоваться при определении множества S.
+
+        Возвращает
+        ----------
+        s_k : tf.Tensor
+            Тензор той же формы, что и var.
         """
         raise NotImplementedError
 
 
-class L2BallConstraint:
-    def __init__(self, radius: float) -> None:
+class L2BallConstraint(ConstraintSet):
+    """
+    Ограничение вида ||w||_2 <= radius (L2-шар).
+
+    Линейный оракул:
+        s_k = -radius * grad / ||grad||_2.
+    """
+
+    def __init__(self, radius: float = 1.0) -> None:
         self.radius = float(radius)
 
-    def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:
-        # argmin_{||s||_2 <= R} <grad, s> = -R * grad / ||grad||
+    def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:  # noqa: ARG002
         grad = tf.convert_to_tensor(grad)
         eps = tf.cast(1e-12, grad.dtype)
         grad_norm = tf.norm(grad)
@@ -45,6 +66,7 @@ class LInfBallConstraint(ConstraintSet):
     def __init__(self, radius: float = 1.0) -> None:
         self.radius = float(radius)
 
-    def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:  # noqa: ARG002
+    def argmin(self, grad: tf.Tensor, var: tf.Tensor) -> tf.Tensor:
         grad = tf.convert_to_tensor(grad)
-        return -self.radius * tf.sign(grad)
+        radius = tf.cast(self.radius, grad.dtype)
+        return -radius * tf.sign(grad)
