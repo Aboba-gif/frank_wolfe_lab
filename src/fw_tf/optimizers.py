@@ -33,7 +33,7 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
         name: str = "FrankWolfe",
         **kwargs: Any,
     ) -> None:
-        # Keras ожидает аргумент learning_rate у Optimizer
+
         super().__init__(name=name, **{"learning_rate": 1.0, **kwargs})
         self._constraint = constraint
         self.gamma = float(gamma)
@@ -48,7 +48,6 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
         )
 
     def build(self, var_list):
-        # Никаких дополнительных trainable переменных не создаём
         super().build(var_list)
 
     def _current_gamma(self) -> tf.Tensor:
