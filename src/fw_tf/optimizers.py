@@ -20,12 +20,9 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
       - S задаётся объектом `ConstraintSet` (например, L2/L∞-шар),
       - γ_k либо фиксирован (gamma), либо убывает как 2/(k+2).
 
-    Примечания
-    ----------
-    * Этот оптимизатор не использует learning_rate (он всегда 1.0),
-      параметр присутствует только для совместимости с API Keras.
-    * Подходит для экспериментов, но в невыпуклых задачах DL чаще
-      демонстрирует стагнацию по сравнению с SGD/Adam.
+    Замечание:
+      * learning_rate в этом оптимизаторе не используется (он всегда 1.0),
+        но присутствует для совместимости с API Keras/TF.
     """
 
     def __init__(
@@ -36,21 +33,22 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
         name: str = "FrankWolfe",
         **kwargs: Any,
     ) -> None:
-
+        # Keras ожидает аргумент learning_rate у Optimizer
         super().__init__(name=name, **{"learning_rate": 1.0, **kwargs})
         self._constraint = constraint
         self.gamma = float(gamma)
         self.use_diminishing_step = bool(use_diminishing_step)
 
-        self._step = self.add_weight(
-            name="fw_step",
-            shape=(),
+        # Счётчик шагов по батчам (не через add_weight, чтобы не зависеть от Keras 3)
+        self._step = tf.Variable(
+            0,
             dtype=tf.int64,
             trainable=False,
-            initializer="zeros",
+            name=f"{name}_step",
         )
 
     def build(self, var_list):
+        # Никаких дополнительных trainable переменных не создаём
         super().build(var_list)
 
     def _current_gamma(self) -> tf.Tensor:
@@ -69,7 +67,7 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
 
     def update_step(self, gradient, variable, learning_rate=None):
         """
-        Один FW-обновление:
+        Один FW-апдейт:
             var <- (1 - γ_k) * var + γ_k * s_k.
         """
         if gradient is None:
@@ -81,9 +79,13 @@ class FrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
         new_var = (1.0 - gamma) * variable + gamma * s_k
         variable.assign(new_var)
 
-    def apply_gradients(self, grads_and_vars, name=None, **kwargs):
+    def apply_gradients(self, grads_and_vars, *args, **kwargs):
+        """
+        Обёртка над базовым apply_gradients без явного аргумента `name`,
+        чтобы не зависеть от конкретной сигнатуры Keras/TF.
+        """
         self._step.assign_add(1)
-        return super().apply_gradients(grads_and_vars, name=name, **kwargs)
+        return super().apply_gradients(grads_and_vars, *args, **kwargs)
 
     def get_config(self):
         config = super().get_config()
@@ -128,12 +130,6 @@ class HybridFrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
         Если True, используем γ_k = 2/(k+2) вместо константного.
     learning_rate : float
         Шаг для SGD-обновления (η).
-
-    Идея
-    ----
-    Это простая стохастическая блочная версия FW: часть координат/слоёв
-    обновляется FW-шагами, часть — обычным SGD. В невыпуклых задачах DL
-    это даёт заметно более адекватное обучение, чем "чистый" FW.
     """
 
     def __init__(
@@ -152,12 +148,11 @@ class HybridFrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
         self.gamma = float(gamma)
         self.use_diminishing_step = bool(use_diminishing_step)
 
-        self._step = self.add_weight(
-            name="fw_step",
-            shape=(),
+        self._step = tf.Variable(
+            0,
             dtype=tf.int64,
             trainable=False,
-            initializer="zeros",
+            name=f"{name}_step",
         )
 
     def build(self, var_list):
@@ -196,9 +191,9 @@ class HybridFrankWolfeOptimizer(tf.keras.optimizers.Optimizer):
 
         tf.cond(u < fw_threshold, fw_update, sgd_update)
 
-    def apply_gradients(self, grads_and_vars, name=None, **kwargs):
+    def apply_gradients(self, grads_and_vars, *args, **kwargs):
         self._step.assign_add(1)
-        return super().apply_gradients(grads_and_vars, name=name, **kwargs)
+        return super().apply_gradients(grads_and_vars, *args, **kwargs)
 
     def get_config(self):
         config = super().get_config()
