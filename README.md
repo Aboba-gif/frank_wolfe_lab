@@ -263,4 +263,4 @@ backbone и ещё 5 эпох тренируем **только последни
 См. файл `LICENSE`.
 
 
-[My experiments with the FW optimizer](https://colab.research.google.com/drive/1qBC__vStl5OdQPZm7LLpfo42P2u2pt-0?usp=sharing)
+[My experiments with the FW optimizer](https://colab.research.google.com/drive/1Z5iwvlKk-vND6rPzmVh5WklLut_frFRd?usp=sharing)
